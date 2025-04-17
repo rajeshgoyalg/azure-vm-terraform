@@ -25,6 +25,24 @@ resource "azurerm_public_ip" "vm_public_ip" {
   sku                 = "Basic"
 }
 
+resource "azurerm_network_security_group" "vm_nsg" {
+  name                = "${var.vm_name}-nsg"
+  location            = azurerm_resource_group.vm_rg.location
+  resource_group_name = azurerm_resource_group.vm_rg.name
+
+  security_rule {
+    name                       = "AllowHTTP"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 resource "azurerm_network_interface" "vm_nic" {
   name                = var.nic_name
   location            = azurerm_resource_group.vm_rg.location
@@ -37,6 +55,13 @@ resource "azurerm_network_interface" "vm_nic" {
     public_ip_address_id          = azurerm_public_ip.vm_public_ip.id
   }
 }
+
+resource "azurerm_network_interface_security_group_association" "vm_nic_nsg" {
+  network_interface_id      = azurerm_network_interface.vm_nic.id
+  network_security_group_id = azurerm_network_security_group.vm_nsg.id
+}
+
+
 
 resource "azurerm_linux_virtual_machine" "vm" {
   name                  = var.vm_name
@@ -64,4 +89,16 @@ resource "azurerm_linux_virtual_machine" "vm" {
     sku       = "20_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(<<EOF
+#cloud-config
+package_update: true
+packages:
+  - nginx
+runcmd:
+  - systemctl enable nginx
+  - systemctl start nginx
+EOF
+  )
 }
+
